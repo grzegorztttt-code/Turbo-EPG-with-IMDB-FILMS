@@ -1,0 +1,27 @@
+name: Update EPG
+
+on:
+  schedule:
+    - cron: "0 2 * * *"  # codziennie o 2:00 UTC
+  workflow_dispatch:
+
+jobs:
+  update-epg:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Pobierz EPG
+        run: |
+          mkdir -p data
+          curl -s -o data/pl.xml.gz https://epg.ovh/pl.xml.gz
+
+      - name: Commit i push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/pl.xml.gz
+          git commit -m "Update EPG"
+          git push
