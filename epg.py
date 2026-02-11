@@ -1,48 +1,65 @@
 import requests
 import gzip
 from lxml import etree
+from time import sleep
 
 
-# 🔥 Główny feed
-EPG_URL = "https://epg.ovh/pl.xml.gz"
+URLS = [
+    "https://epg.ovh/pl.xml.gz",
+    "https://iptv-org.github.io/epg/guides/pl.xml",
+    "https://iptv-org.github.io/epg/guides/pl.xml.gz"
+]
 
-# 🔥 Backup (DUŻO stabilniejszy)
-FALLBACK_URL = "https://iptv-org.github.io/epg/guides/pl.xml"
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept-Encoding": "gzip, deflate"
+}
+
+
+def try_download(url):
+
+    try:
+        r = requests.get(
+            url,
+            headers=HEADERS,
+            stream=True,
+            timeout=90
+        )
+
+        if r.status_code != 200:
+            print(f"EPG failed {url} -> {r.status_code}")
+            return None
+
+        # gzip?
+        if url.endswith(".gz"):
+            return gzip.GzipFile(fileobj=r.raw)
+
+        return r.raw
+
+    except Exception as e:
+        print("Download error:", url, e)
+        return None
 
 
 def download_xml():
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    }
+    for url in URLS:
 
-    try:
-        r = requests.get(
-            EPG_URL,
-            headers=headers,
-            stream=True,
-            timeout=120
-        )
+        stream = try_download(url)
 
-        if r.status_code == 200:
-            return gzip.GzipFile(fileobj=r.raw)
+        if stream:
+            print("Using EPG:", url)
+            return stream
 
-        print("epg.ovh failed -> using fallback")
+        sleep(2)
 
-    except Exception as e:
-        print("EPG primary error:", e)
-
-    # 🔥 fallback
-    r = requests.get(
-        FALLBACK_URL,
-        headers=headers,
-        stream=True,
-        timeout=120
+    # 🔥 zamiast crasha — czytelny error
+    raise RuntimeError(
+        "❌ Nie udało się pobrać EPG z żadnego źródła.\n"
+        "Możliwe że serwer blokuje Streamlit Cloud.\n"
+        "Spróbuj ponownie za kilka minut."
     )
-
-    r.raise_for_status()
-
-    return r.raw
 
 
 def parse_programmes(xml_stream):
@@ -64,7 +81,6 @@ def parse_programmes(xml_stream):
             "end": elem.get("stop"),
         }
 
-        # 🔥 krytyczne dla RAM
         elem.clear()
         while elem.getprevious() is not None:
             del elem.getparent()[0]
