@@ -3,16 +3,46 @@ import gzip
 from lxml import etree
 
 
-# 🔥 Polska wersja (zmień jeśli chcesz inne kraje)
+# 🔥 Główny feed
 EPG_URL = "https://epg.ovh/pl.xml.gz"
+
+# 🔥 Backup (DUŻO stabilniejszy)
+FALLBACK_URL = "https://iptv-org.github.io/epg/guides/pl.xml"
 
 
 def download_xml():
-    r = requests.get(EPG_URL, stream=True, timeout=120)
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+
+    try:
+        r = requests.get(
+            EPG_URL,
+            headers=headers,
+            stream=True,
+            timeout=120
+        )
+
+        if r.status_code == 200:
+            return gzip.GzipFile(fileobj=r.raw)
+
+        print("epg.ovh failed -> using fallback")
+
+    except Exception as e:
+        print("EPG primary error:", e)
+
+    # 🔥 fallback
+    r = requests.get(
+        FALLBACK_URL,
+        headers=headers,
+        stream=True,
+        timeout=120
+    )
+
     r.raise_for_status()
 
-    # NIE używamy BytesIO -> mniej RAM
-    return gzip.GzipFile(fileobj=r.raw)
+    return r.raw
 
 
 def parse_programmes(xml_stream):
